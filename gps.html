@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Camera App</title>
+    <style>
+        body {
+            background: linear-gradient(to right, #6cba93, #8ecae6);
+            font-family: Arial, sans-serif;
+            color: #ffffff;
+            text-align: center;
+            padding: 0 10px;
+            margin: 0;
+        }
+        #header {
+            font-size: 32px;
+            font-weight: bold;
+            color: #073b4c;
+            margin: 20px 0;
+        }
+        #form {
+            margin-bottom: 20px;
+        }
+        #form label {
+            font-size: 18px;
+            margin-right: 10px;
+        }
+        #form input {
+            padding: 11px;
+            font-size: 19px;
+            border-radius: 20px;
+            border: 1px solid #ccc;
+        }
+        #cameraContainer {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            margin-bottom: 20px;
+            position: relative;
+        }
+        #camera {
+            width: 100%;
+            max-width: 540px;
+            height: 600px;
+            border: 4px solid #d9c1ef;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            background-color: #000;
+            object-fit: cover;
+        }
+        #overlayCanvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: none;
+        }
+        #timer {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background-color: rgba(0, 0, 0, 0.5);
+            color: #ffffff;
+            padding: 5px 10px;
+            border-radius: 5px;
+            font-size: 18px;
+        }
+        #btnContainer {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-around;
+            width: 100%;
+            max-width: 400px;
+            margin-bottom: 20px;
+        }
+        button {
+            background-color: #023047;
+            color: #e513b1;
+            font-size: 16px;
+            padding: 14px 2px;
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+            margin-bottom: 10px;
+            width: 120px;
+        }
+        button:hover {
+            background-color: #8ecae6;
+        }
+        #products {
+            margin-bottom: 30px;
+        }
+        #products p, #products a {
+            font-size: 18px;
+            color: #77c4dd;
+        }
+        #footer {
+            text-align: center;
+            font-size: 14px;
+            color: #77c4dd;
+            margin-top: 20px;
+        }
+        #footer p {
+            margin: 5px 0;
+        }
+        #context.fillText{
+            color: #e513b1;
+        }
+        @media (max-width: 768px) {
+            #camera {
+                max-width: 85%;
+            }
+            #btnContainer {
+                max-width: 95%;
+            }
+            button {
+                width: 24%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="header">
+        GPS CAMERA
+    </div>
+    <div id="form">
+        <label for="fname"> Name:</label>
+        <input type="text" id="fname" name="fname"><br><br>
+        <label for="lname">Location:</label>
+        <input type="text" id="lname" name="lname"><br><br>
+    </div>
+    <div id="cameraContainer">
+        <video id="camera" autoplay playsinline></video>
+        <canvas id="overlayCanvas"></canvas>
+        <div id="timer">0s</div>
+        <div id="btnContainer">
+            <button id="openCamera">Open Camera</button>
+            <button id="captureBtn">Capture Image</button>
+            <button id="startRecordingBtn">Start Recording</button>
+            <button id="stopRecordingBtn" disabled>Stop Recording</button>
+        </div>
+    </div>
+    <div id="context.fillText"></div>
+    
+    <script>
+        const openCameraBtn = document.getElementById('openCamera');
+        const captureBtn = document.getElementById('captureBtn');
+        const startRecordingBtn = document.getElementById('startRecordingBtn');
+        const stopRecordingBtn = document.getElementById('stopRecordingBtn');
+        const camera = document.getElementById('camera');
+        const overlayCanvas = document.getElementById('overlayCanvas');
+        const overlayContext = overlayCanvas.getContext('2d');
+        const timerElement = document.getElementById('timer');
+        const fnameInput = document.getElementById('fname');
+        const lnameInput = document.getElementById('lname');
+        let stream = null;
+        let mediaRecorder = null;
+        let chunks = [];
+        let countdown;
+
+        openCameraBtn.addEventListener('click', async () => {
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({
+                    video: {
+                        facingMode: 'environment',
+                        width: { ideal: 400 }, // Adjusted width for landscape
+                        height: { ideal: 700 } // Adjusted height for landscape
+                    },
+                    audio: false // Include audio
+                });
+                camera.srcObject = stream;
+            } catch (err) {
+                console.error('Error accessing camera:', err);
+            }
+        });
+
+        const captureImage = () => {
+    if (!stream) return;
+
+    navigator.geolocation.getCurrentPosition((position) => {
+    const { latitude, longitude } = position.coords;
+    const locationText = `Lat: ${latitude.toFixed(5)}, Long: ${longitude.toFixed(5)}`;
+    const canvas = document.createElement('canvas');
+    const context = canvas.getContext('2d');
+    const videoWidth = camera.videoWidth; // Adjusted width for landscape
+    const videoHeight = camera.videoHeight; // Adjusted height for landscape
+    canvas.width = videoWidth;
+    canvas.height = videoHeight;
+
+    context.drawImage(camera, 0, 0, videoWidth, videoHeight);
+
+    const firstName = fnameInput.value.trim();
+    const productName = lnameInput.value.trim();
+    const dateTime = new Date().toLocaleString();
+
+    const textMargin = 20;
+    const lineHeight = 30;
+    const padding = 15;
+
+    const textLines = [
+        `User: ${firstName}`,
+        `Product: ${productName}`,
+        locationText,
+        dateTime
+    ];
+    
+    context.font = '24px Arial';
+    context.textBaseline = 'top';
+    
+    const textWidth = textLines.reduce((max, line) => Math.max(max, context.measureText(line).width), 0);
+    const backgroundHeight = textLines.length * lineHeight + padding * 2;
+    const backgroundY = videoHeight - backgroundHeight - textMargin;
+    
+    // Draw semi-transparent gradient background
+    const gradient = context.createLinearGradient(0, backgroundY, 0, backgroundY + backgroundHeight);
+    gradient.addColorStop(0, '#F0F8FF'); 
+    gradient.addColorStop(1, '#F0F8FF'); 
+    context.globalAlpha=0.3;
+    context.fillStyle = gradient;
+    context.fillRect(0, backgroundY, videoWidth, backgroundHeight);
+
+    // Draw text
+    context.fillStyle = '#141414';
+    textLines.forEach((line, index) => {
+        context.fillText(line, textMargin, backgroundY + padding + index * lineHeight);
+    });
+
+    // Convert canvas content to data URL for image download
+    const imageData = canvas.toDataURL('image/jpeg');
+    const downloadLink = document.createElement('a');
+    downloadLink.href = imageData;
+    downloadLink.download = 'captured_image.jpg';
+    document.body.appendChild(downloadLink);
+    downloadLink.click();
+    document.body.removeChild(downloadLink);
+});
+
+};
+
+
+        captureBtn.addEventListener('click', captureImage);
+
+        startRecordingBtn.addEventListener('click', async () => {
+            if (!stream) return;
+
+            try {
+                mediaRecorder = new MediaRecorder(stream);
+            } catch (e) {
+                console.error('Failed to create MediaRecorder:', e);
+                return;
+            }
+
+            let timer = 0;
+            timerElement.innerText = `${timer}s`;
+            timerElement.style.display = 'block';
+
+            countdown = setInterval(() => {
+                timer++;
+                timerElement.innerText = `${timer}s`;
+            }, 1000);
+
+            mediaRecorder.ondataavailable = (event) => {
+                chunks.push(event.data);
+            };
+
+            mediaRecorder.onstop = () => {
+                clearInterval(countdown);
+                timerElement.style.display = 'none';
+
+                const blob = new Blob(chunks, { type: 'video/webm' });
+                const videoUrl = URL.createObjectURL(blob);
+
+                // Create a video element to display the recorded video
+                const videoElement = document.createElement('video');
+                videoElement.src = videoUrl;
+                videoElement.controls = true;
+                videoElement.style.width = '100%';
+                videoElement.style.maxWidth = '540px';
+                videoElement.style.border = '4px solid #d9c1ef';
+                videoElement.style.borderRadius = '10px';
+                videoElement.style.marginBottom = '20px';
+
+                // Append the video element to the camera container
+                const cameraContainer = document.getElementById('cameraContainer');
+                cameraContainer.appendChild(videoElement);
+
+                // Overlay details on the recorded video
+                overlayCanvas.width = videoElement.videoWidth;
+                overlayCanvas.height = videoElement.videoHeight;
+                overlayContext.drawImage(videoElement, 0, 0);
+
+                const firstName = fnameInput.value.trim();
+                const productName = lnameInput.value.trim();
+                const dateTime = new Date().toLocaleString();
+
+                overlayContext.font = '24px Arial';
+                overlayContext.fillStyle = '#ffffff';
+                
+                const textMargin = 10;
+                const lineHeight = 30;
+                overlayContext.fillText(`User: ${firstName}`, textMargin, textMargin + lineHeight);
+                overlayContext.fillText(`Product: ${productName}`, textMargin, textMargin + 2 * lineHeight);
+                overlayContext.fillText(dateTime, textMargin, videoElement.videoHeight - 20);
+
+                // Save the overlayed video
+                const overlayedVideo = overlayCanvas.toDataURL('image/jpeg');
+                const downloadLink = document.createElement('a');
+                downloadLink.href = overlayedVideo;
+                downloadLink.download = 'captured_video.webm';
+                document.body.appendChild(downloadLink);
+                downloadLink.click();
+                document.body.removeChild(downloadLink);
+
+                chunks = [];
+            };
+
+            mediaRecorder.start();
+            startRecordingBtn.disabled = true;
+            stopRecordingBtn.disabled = false;
+        });
+
+        stopRecordingBtn.addEventListener('click', () => {
+            if (mediaRecorder && mediaRecorder.state === 'recording') {
+                mediaRecorder.stop();
+                startRecordingBtn.disabled = false;
+                stopRecordingBtn.disabled = true;
+            }
+        });
+    </script>
+</body>
+</html>
